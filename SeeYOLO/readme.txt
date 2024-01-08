@@ -1,13 +1,12 @@
 SeeYOLO: Real-time Object Detection
 
-Welcome to SeeYOLO! This is a work-in-progress application designed to bring object detection to your desktop using your webcam and the power of YOLOv5 and YOLOv8 models. With an emphasis on user experience, our GUI lets you navigate the complexities of AI with ease.
+Welcome to SeeYOLO! This is a work-in-progress application designed to bring object detection to your desktop using your webcam and the power of YOLOv8. With an emphasis on user experience, our GUI lets you navigate the complexities of AI with ease.
 
 Introduction
 Combining the accuracy and efficiency of YOLO algorithms with an intuitive interface, SeeYOLO opens new doors for hobbyists, researchers, and developers alike. Our goal is to make sophisticated AI accessible and easy to use for real-time applications.
 
 Features
 Real-time detection allows your webcam to identify objects as they appear.
-Choose between YOLOv5 and YOLOv8 models based on your requirements.
 Adjust confidence thresholds to filter detections according to precision.
 Control which object classes are displayed during the detection.
 Take screenshots of detected objects for documentation or further analysis.
