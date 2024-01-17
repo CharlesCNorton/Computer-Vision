@@ -1,6 +1,8 @@
 import numpy as np
 import cv2
 from math import sqrt, floor
+import tkinter as tk
+from tkinter import simpledialog
 
 def draw_hexagon(center, size):
     """Draw a single hexagon given a center and a size."""
@@ -48,8 +50,50 @@ def draw_numbered_hexagonal_grid(img, hex_size):
 
     return img
 
+def get_hexagon_centers(hex_size, width, height):
+    """Get the centers of all hexagons in the grid."""
+    w = sqrt(3) * hex_size
+    h = 2 * hex_size
+    vert_dist = 3/4 * h
+    horiz_count = int(floor(width / w)) + 1
+    vert_count = int(floor(height / vert_dist)) + 1
+    horiz_margin = (width - (horiz_count * w - w / 2)) / 2
+    vert_margin = (height - (vert_count * vert_dist - vert_dist / 4)) / 2
+
+    centers = {}
+    number = 1
+    for row in range(vert_count + 1):
+        for col in range(horiz_count + 1):
+            center_x = int(col * w - w / 2 + horiz_margin)
+            center_y = int(row * vert_dist - vert_dist / 4 + vert_margin)
+            if row % 2 == 0:
+                center_x -= int(w / 2)
+            if (0 <= center_x < width) and (0 <= center_y < height):
+                centers[number] = (center_x, center_y)
+                number += 1
+    return centers
+
+def zoom_into_hexagon(frame, center, hex_size):
+    """Zoom into the selected hexagon."""
+    zoom_factor = 3
+    hex_width = int(sqrt(3) * hex_size)
+    hex_height = 2 * hex_size
+    x, y = center
+    x1, y1 = max(x - hex_width // 2, 0), max(y - hex_height // 2, 0)
+    x2, y2 = min(x + hex_width // 2, frame.shape[1]), min(y + hex_height // 2, frame.shape[0])
+    cropped_img = frame[y1:y2, x1:x2]
+    if cropped_img.size == 0:
+        return None
+    return cv2.resize(cropped_img, None, fx=zoom_factor, fy=zoom_factor, interpolation=cv2.INTER_LINEAR)
+
+def ask_hexagon_number():
+    """Creates a Tkinter popup to ask for the hexagon number."""
+    root = tk.Tk()
+    root.withdraw()  # Hide the main window
+    num = simpledialog.askinteger("Input", "Enter hexagon number:", parent=root, minvalue=0)
+    return num
+
 def main():
-    """Main function to capture video feed and overlay the hexagonal grid."""
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         raise IOError("Cannot open webcam")
@@ -62,17 +106,32 @@ def main():
     }
     current_resolution = 'medium'
 
+    selected_hex = None
+
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
         frame_with_grid = draw_numbered_hexagonal_grid(frame, hex_size)
+        centers = get_hexagon_centers(hex_size, frame.shape[1], frame.shape[0])
+
+        if selected_hex and selected_hex in centers:
+            center = centers[selected_hex]
+            zoomed_hex = zoom_into_hexagon(frame, center, hex_size)
+            if zoomed_hex is not None:
+                cv2.imshow('Zoomed Hexagon', zoomed_hex)
+
         cv2.imshow('Hexagonal Grid Overlay', frame_with_grid)
 
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
             break
+        elif key == ord('s'):
+            new_selection = ask_hexagon_number()
+            if new_selection is not None:
+                selected_hex = new_selection
+
         elif key == ord('l'):
             hex_size = hex_sizes['low']
             current_resolution = 'low'
