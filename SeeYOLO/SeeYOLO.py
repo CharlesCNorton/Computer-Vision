@@ -6,30 +6,48 @@ import time
 import tkinter as tk
 from tkinter import simpledialog
 from ultralytics import YOLO
+import pyttsx3
+from queue import Queue
 
-class_names = ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
-               'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
-               'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
-               'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard',
-               'tennis racket', 'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple',
-               'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
-               'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote', 'keyboard',
-               'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
-               'scissors', 'teddy bear', 'hair drier', 'toothbrush']
-yolov8_model_variants = {'Nano': 'enter path to yolov8n.pt', 'Medium': 'enter path to yolov8m.pt', 'XLarge': ' enter path to yolov8x.pt'}
+class_names = [
+    'person', 'bicycle', 'car', 'motorcycle', 'airplane',
+    'bus', 'train', 'truck', 'boat', 'traffic light',
+    'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird',
+    'cat', 'dog', 'horse', 'sheep', 'cow',
+    'elephant', 'bear', 'zebra', 'giraffe', 'backpack',
+    'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
+    'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat',
+    'baseball glove', 'skateboard', 'surfboard', 'tennis racket', 'bottle',
+    'wine glass', 'cup', 'fork', 'knife', 'spoon',
+    'bowl', 'banana', 'apple', 'sandwich', 'orange',
+    'broccoli', 'carrot', 'hot dog', 'pizza', 'donut',
+    'cake', 'chair', 'couch', 'potted plant', 'bed',
+    'dining table', 'toilet', 'tv', 'laptop', 'mouse',
+    'remote', 'keyboard', 'cell phone', 'microwave', 'oven',
+    'toaster', 'sink', 'refrigerator', 'book', 'clock',
+    'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+]
+
+yolov8_model_variants = {'Nano': 'ENTER_PATH', 'Medium': 'ENTER_PATH', 'XLarge': 'ENTER_PATH'}
 
 class ObjectDetectionApp:
     def __init__(self):
         self.model = None
         self.webcam_thread_running = False
-        self.confidence_threshold = 0.45
+        self.confidence_threshold = 0.65
         self.current_frame = None
         self.screenshot_objects = set()
         self.allow_screenshots = False
         self.screenshot_path = 'enter path to screenshots folder'
-        self.display_classes = set(class_names)
+        self.display_classes = set()
         self.object_counts = {class_name: 0 for class_name in class_names}
-        self.load_model('enter path to yolov8x.pt')
+        self.last_announced_detections = set()
+        self.voice_enabled = False
+        self.speech_engine = pyttsx3.init()
+        self.speech_queue = Queue()
+        self.speech_thread = threading.Thread(target=self.process_speech_queue, daemon=True)
+        self.speech_thread.start()
+        self.load_model('ENTER_PATH')
 
     def load_model(self, model_path):
         try:
@@ -57,6 +75,9 @@ class ObjectDetectionApp:
     def postprocess_and_visualize(self, img, detections):
         self.object_counts = {class_name: 0 for class_name in class_names}
         self.current_frame = img.copy()
+        current_detection_set = set()
+        detection_descriptions = []
+
         for det in detections:
             x1, y1, x2, y2, conf, cls_id = det
             if conf < self.confidence_threshold:
@@ -64,13 +85,31 @@ class ObjectDetectionApp:
             cls_id = int(cls_id)
             class_name = class_names[cls_id]
             self.object_counts[class_name] += 1
+
             if class_name in self.display_classes:
+                detection_description = f"{class_name} detected"
+                current_detection_set.add(detection_description)
                 label = f'{class_name} {conf:.2f}'
                 img = cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
                 img = cv2.putText(img, label, (int(x1), int(y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
             if self.allow_screenshots and class_name in self.screenshot_objects:
                 self.save_screenshot()
+
+        new_detections = current_detection_set - self.last_announced_detections
+        if new_detections and self.voice_enabled:
+            self.speech_queue.put(', '.join(new_detections))
+            self.last_announced_detections = current_detection_set
+
         return img
+
+    def process_speech_queue(self):
+        while True:
+            text = self.speech_queue.get()
+            if text is None:
+                break
+            self.speech_engine.say(text)
+            self.speech_engine.runAndWait()
 
     def save_screenshot(self):
         if self.current_frame is not None:
@@ -100,6 +139,11 @@ class ObjectDetectionApp:
             cap.release()
             cv2.destroyAllWindows()
             self.webcam_thread_running = False
+
+    def toggle_voice_feature(self):
+        self.voice_enabled = not self.voice_enabled
+        print(f"Voice feature {'enabled' if self.voice_enabled else 'disabled'}.")
+
     def print_object_counts(self):
         print("\nCurrent Object Counts:")
         for class_name, count in self.object_counts.items():
@@ -169,6 +213,7 @@ class ObjectDetectionApp:
         tk.Button(root, text="Set Confidence Threshold", command=self.set_confidence_threshold).pack()
         tk.Button(root, text="Toggle Screenshot Objects", command=self.toggle_screenshot_object).pack()
         tk.Button(root, text="Toggle Screenshot Feature", command=self.toggle_screenshot_feature).pack()
+        tk.Button(root, text="Toggle Voice Feature", command=self.toggle_voice_feature).pack()
         self.create_model_switch_buttons(root)
         tk.Button(root, text="Exit", command=lambda: root.destroy()).pack()
         root.mainloop()
