@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import filedialog, simpledialog, messagebox
 import threading
 import os
-import time
 import cv2
 from ultralytics import YOLO
 import numpy as np
@@ -14,7 +13,7 @@ class ObjectDetectionApp:
         self.confidence_threshold = 0.65
         self.current_frame = None
         self.allow_screenshots = False
-        self.screenshot_path = 'D:\\Screenshots\\'
+        self.screenshot_path = ''
         self.display_classes = set()
         self.model_path = ''
         self.initialize_model()
@@ -37,6 +36,14 @@ class ObjectDetectionApp:
             self.model_path = path
             self.initialize_model()
 
+    def set_screenshot_folder(self):
+        folder_path = filedialog.askdirectory(title="Select Screenshot Save Folder")
+        if folder_path:
+            self.screenshot_path = folder_path
+            if not os.path.exists(self.screenshot_path):
+                os.makedirs(self.screenshot_path)
+            messagebox.showinfo("Information", "Screenshot folder set to: " + self.screenshot_path)
+
     def set_custom_classes(self):
         custom_classes = simpledialog.askstring("Custom Classes", "Enter classes for detection (comma-separated):")
         if custom_classes:
@@ -55,6 +62,7 @@ class ObjectDetectionApp:
 
     def toggle_screenshot_feature(self):
         self.allow_screenshots = not self.allow_screenshots
+        messagebox.showinfo("Information", "Screenshot feature " + ("enabled" if self.allow_screenshots else "disabled"))
 
     def run_inference(self, img):
         if not self.model:
@@ -74,8 +82,6 @@ class ObjectDetectionApp:
         return detections
 
     def postprocess_and_visualize(self, img, detections):
-        if not detections:
-            return img
         for det in detections:
             x1, y1, x2, y2, conf, cls_id = det
             if conf < self.confidence_threshold:
@@ -91,6 +97,7 @@ class ObjectDetectionApp:
         root = tk.Tk()
         root.title("Object Detection Settings")
         tk.Button(root, text="Set YOLO Model Path", command=self.set_model_path).pack()
+        tk.Button(root, text="Set Screenshot Folder", command=self.set_screenshot_folder).pack()
         tk.Button(root, text="Start Webcam Capture", command=lambda: threading.Thread(target=self.webcam_capture).start()).pack()
         tk.Button(root, text="Set Custom Classes", command=self.set_custom_classes).pack()
         tk.Button(root, text="Set Confidence Threshold", command=self.set_confidence_threshold).pack()
@@ -122,8 +129,6 @@ class ObjectDetectionApp:
 
 def main():
     app = ObjectDetectionApp()
-    if not os.path.exists(app.screenshot_path):
-        os.makedirs(app.screenshot_path)
     app.create_gui()
 
 if __name__ == "__main__":
