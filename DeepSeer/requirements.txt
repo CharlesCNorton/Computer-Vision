@@ -1,0 +1,7 @@
+
+torch>=1.7.1
+transformers>=4.0.0
+opencv-python>=4.5.1.48
+tkinter # Note: tkinter may need to be installed separately depending on your environment
+Pillow>=8.1.0
+colorama>=0.4.4
