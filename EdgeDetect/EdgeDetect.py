@@ -4,10 +4,11 @@ import subprocess
 import urllib.request
 import tkinter as tk
 from tkinter import filedialog, messagebox
+import pygame
 
 def install_packages():
     packages = [
-        'opencv-python', 'numpy', 'simpleaudio', 'tk', 'ultralytics', 'scipy'
+        'opencv-python', 'numpy', 'tk', 'ultralytics', 'scipy', 'pygame'
     ]
     for package in packages:
         subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
@@ -47,7 +48,6 @@ def run_application(model_path):
     from tkinter import simpledialog, messagebox
     import threading
     import numpy as np
-    import simpleaudio as sa
     from scipy import signal
     from ultralytics import YOLO
 
@@ -74,6 +74,7 @@ def run_application(model_path):
             self.object_counts = {class_name: 0 for class_name in self.class_names}
             self.thread = None
             self.display_video = False
+            pygame.mixer.init()
 
         def run_inference(self, img):
             if not hasattr(self.model, 'predict'):
@@ -137,8 +138,9 @@ def run_application(model_path):
                 audio = np.hstack([alarm_wave, alarm_wave])
                 audio *= 32767 / np.max(np.abs(audio))
                 audio = audio.astype(np.int16)
-                play_obj = sa.play_buffer(audio, 2, 2, fs)
-                play_obj.wait_done()
+                pygame.mixer.init(frequency=fs, size=-16, channels=2)
+                sound = pygame.sndarray.make_sound(audio)
+                sound.play()
             except Exception as e:
                 print(f"Failed to play alarm sound: {e}")
 
@@ -187,7 +189,7 @@ def run_application(model_path):
 
         def create_gui(self):
             root = tk.Tk()
-            root.title("EdgeDetect - Security using your edge devices!")
+            root.title("EdgeDetect - AI-powered security for low-resource edge devices!")
             tk.Button(root, text="Start Webcam Capture", command=self.start_webcam_capture_thread).pack()
             tk.Button(root, text="Stop Webcam Capture", command=self.stop_webcam_capture).pack()
             tk.Button(root, text="Toggle Alarm Feature", command=self.toggle_alarm_feature).pack()
