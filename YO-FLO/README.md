@@ -38,13 +38,6 @@ The impetus behind YO-FLO was to explore whether the new Florence foundational v
 pip install torch transformers pillow opencv-python colorama simpleaudio huggingface-hub
 ```
 
-### Cloning the Repository
-
-```bash
-git clone https://github.com/yourusername/YO-FLO.git
-cd YO-FLO
-```
-
 ## Usage
 
 ### Running YO-FLO
@@ -104,7 +97,7 @@ We welcome contributions to improve YO-FLO. Please follow these steps:
 
 ## License
 
-YO-FLO is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+YO-FLO is licensed under the MIT License.
 
 ---
 
