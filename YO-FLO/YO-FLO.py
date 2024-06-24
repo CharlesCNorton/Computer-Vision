@@ -148,7 +148,7 @@ class YO_FLO:
 
     def set_phrase(self):
         try:
-            phrase = simpledialog.askstring("Set Phrase", "Enter the phrase you want to ground (e.g., 'a red car', 'a woman with a hat'):")
+            phrase = simpledialog.askstring("Set Phrase", "Enter the yes or no question you want answered (e.g., 'Is the person smiling?', 'Is the cat laying down?'):")
             self.phrase = phrase if phrase else None
             if self.phrase:
                 print(f"{Fore.GREEN}{Style.BRIGHT}Set to ground: {self.phrase}{Style.RESET_ALL}")
@@ -293,7 +293,6 @@ class YO_FLO:
                 except Exception as e:
                     print(f"{Fore.RED}{Style.BRIGHT}Error during frame processing: {e}{Style.RESET_ALL}")
 
-                # Ensure the Tkinter window is updated
                 if self.caption_window:
                     self.caption_window.update_idletasks()
 
