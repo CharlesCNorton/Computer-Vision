@@ -25,12 +25,15 @@ class YO_FLO:
         self.screenshot_active = False
         self.target_detected = False
         self.last_beep_time = 0
-        self.stop_webcam_flag = False
+        self.stop_webcam_flag = threading.Event()
         self.model_path = None
         self.phrase = None
         self.debug = False
         self.caption_window = None
         self.caption_label = None
+        self.object_detection_active = False
+        self.phrase_grounding_active = False
+        self.webcam_thread = None
 
     def init_model(self, model_path):
         try:
@@ -99,6 +102,8 @@ class YO_FLO:
 
     def plot_bbox(self, image):
         try:
+            if not self.detections:
+                return image
             for bbox, label in self.detections:
                 x1, y1, x2, y2 = map(int, bbox)
                 cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -176,6 +181,28 @@ class YO_FLO:
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error toggling debug mode: {e}{Style.RESET_ALL}")
 
+    def toggle_object_detection(self):
+        try:
+            self.object_detection_active = not self.object_detection_active
+            if not self.object_detection_active:
+                self.detections.clear()
+                self.update_display()
+            status = "enabled" if self.object_detection_active else "disabled"
+            print(f"{Fore.GREEN}{Style.BRIGHT}Object detection is now {status}{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}{Style.BRIGHT}Error toggling object detection: {e}{Style.RESET_ALL}")
+
+    def toggle_phrase_grounding(self):
+        try:
+            self.phrase_grounding_active = not self.phrase_grounding_active
+            if not self.phrase_grounding_active and self.caption_window:
+                self.caption_window.destroy()
+                self.caption_window = None
+            status = "enabled" if self.phrase_grounding_active else "disabled"
+            print(f"{Fore.GREEN}{Style.BRIGHT}Phrase grounding is now {status}{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}{Style.BRIGHT}Error toggling phrase grounding: {e}{Style.RESET_ALL}")
+
     def update_caption_window(self, caption):
         if not self.caption_window:
             self.caption_window = tk.Tk()
@@ -205,8 +232,12 @@ class YO_FLO:
             print(f"{Fore.RED}{Style.BRIGHT}Error saving screenshot: {e}{Style.RESET_ALL}")
 
     def start_webcam_detection(self):
-        self.stop_webcam_flag = False
-        threading.Thread(target=self._webcam_detection_thread).start()
+        if self.webcam_thread and self.webcam_thread.is_alive():
+            print(f"{Fore.RED}{Style.BRIGHT}Webcam detection is already running.{Style.RESET_ALL}")
+            return
+        self.stop_webcam_flag.clear()
+        self.webcam_thread = threading.Thread(target=self._webcam_detection_thread)
+        self.webcam_thread.start()
 
     def _webcam_detection_thread(self):
         try:
@@ -215,7 +246,7 @@ class YO_FLO:
                 print(f"{Fore.RED}{Style.BRIGHT}Error: Could not open webcam.{Style.RESET_ALL}")
                 return
 
-            while not self.stop_webcam_flag:
+            while not self.stop_webcam_flag.is_set():
                 ret, frame = cap.read()
                 if not ret:
                     print(f"{Fore.RED}{Style.BRIGHT}Error: Failed to capture image from webcam.{Style.RESET_ALL}")
@@ -226,13 +257,14 @@ class YO_FLO:
                     image_pil = Image.fromarray(image)
                     if self.debug: print(f"Captured frame from webcam")
 
-                    if self.phrase:
+                    if self.phrase_grounding_active and self.phrase:
                         if self.debug: print(f"Phrase grounding enabled with phrase: {self.phrase}")
                         results = self.run_phrase_grounding(image_pil, self.phrase)
                         if results:
                             caption = "Yes" if "yes" in results else "No"
                             self.update_caption_window(caption)
-                    else:
+
+                    if self.object_detection_active:
                         if self.debug: print(f"Running object detection")
                         results = self.run_object_detection(image_pil)
                         if results and '<OD>' in results:
@@ -273,7 +305,17 @@ class YO_FLO:
             print(f"{Fore.RED}{Style.BRIGHT}Error during webcam detection: {e}{Style.RESET_ALL}")
 
     def stop_webcam_detection(self):
-        self.stop_webcam_flag = True
+        if not self.webcam_thread or not self.webcam_thread.is_alive():
+            print(f"{Fore.RED}{Style.BRIGHT}Webcam detection is not running.{Style.RESET_ALL}")
+            return
+        self.stop_webcam_flag.set()
+        self.webcam_thread.join()
+
+    def update_display(self):
+        if not self.object_detection_active:
+            empty_frame = np.zeros((480, 640, 3), np.uint8)
+            cv2.imshow('Object Detection', empty_frame)
+            cv2.waitKey(1)
 
     def main_menu(self):
         root = tk.Tk()
@@ -287,6 +329,8 @@ class YO_FLO:
             tk.Button(root, text="Toggle Beep on Detection", command=self.toggle_beep).pack(fill='x')
             tk.Button(root, text="Toggle Screenshot on Detection", command=self.toggle_screenshot).pack(fill='x')
             tk.Button(root, text="Toggle Debug Mode", command=self.toggle_debug).pack(fill='x')
+            tk.Button(root, text="Toggle Object Detection", command=self.toggle_object_detection).pack(fill='x')
+            tk.Button(root, text="Toggle Phrase Grounding", command=self.toggle_phrase_grounding).pack(fill='x')
             tk.Button(root, text="Start Webcam Detection", command=self.start_webcam_detection).pack(fill='x')
             tk.Button(root, text="Stop Webcam Detection", command=self.stop_webcam_detection).pack(fill='x')
             tk.Button(root, text="Exit", command=root.quit).pack(fill='x')
