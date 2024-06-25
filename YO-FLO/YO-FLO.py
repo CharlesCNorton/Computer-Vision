@@ -29,7 +29,6 @@ class YO_FLO:
         self.model_path = None
         self.phrase = None
         self.debug = False
-        self.caption_window = None
         self.caption_label = None
         self.object_detection_active = False
         self.phrase_grounding_active = False
@@ -195,23 +194,14 @@ class YO_FLO:
     def toggle_phrase_grounding(self):
         try:
             self.phrase_grounding_active = not self.phrase_grounding_active
-            if not self.phrase_grounding_active and self.caption_window:
-                self.caption_window.destroy()
-                self.caption_window = None
             status = "enabled" if self.phrase_grounding_active else "disabled"
             print(f"{Fore.GREEN}{Style.BRIGHT}Phrase grounding is now {status}{Style.RESET_ALL}")
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error toggling phrase grounding: {e}{Style.RESET_ALL}")
 
     def update_caption_window(self, caption):
-        if not self.caption_window:
-            self.caption_window = tk.Tk()
-            self.caption_window.title("Phrase Grounding Caption")
-            self.caption_label = tk.Label(self.caption_window, text=caption)
-            self.caption_label.pack()
-        else:
+        if self.caption_label:
             self.caption_label.config(text=caption)
-        self.caption_window.update_idletasks()
 
     def beep_sound(self):
         try:
@@ -293,9 +283,6 @@ class YO_FLO:
                 except Exception as e:
                     print(f"{Fore.RED}{Style.BRIGHT}Error during frame processing: {e}{Style.RESET_ALL}")
 
-                if self.caption_window:
-                    self.caption_window.update_idletasks()
-
             cap.release()
             cv2.destroyAllWindows()
         except cv2.error as e:
@@ -321,18 +308,34 @@ class YO_FLO:
         root.title("YO-FLO Menu")
 
         try:
-            tk.Button(root, text="Select Model Path", command=self.select_model_path).pack(fill='x')
-            tk.Button(root, text="Download Model from HuggingFace", command=self.download_model).pack(fill='x')
-            tk.Button(root, text="Set Class Name", command=self.set_class_name).pack(fill='x')
-            tk.Button(root, text="Set Phrase", command=self.set_phrase).pack(fill='x')
-            tk.Button(root, text="Toggle Beep on Detection", command=self.toggle_beep).pack(fill='x')
-            tk.Button(root, text="Toggle Screenshot on Detection", command=self.toggle_screenshot).pack(fill='x')
-            tk.Button(root, text="Toggle Debug Mode", command=self.toggle_debug).pack(fill='x')
-            tk.Button(root, text="Toggle Object Detection", command=self.toggle_object_detection).pack(fill='x')
-            tk.Button(root, text="Toggle Phrase Grounding", command=self.toggle_phrase_grounding).pack(fill='x')
-            tk.Button(root, text="Start Webcam Detection", command=self.start_webcam_detection).pack(fill='x')
-            tk.Button(root, text="Stop Webcam Detection", command=self.stop_webcam_detection).pack(fill='x')
-            tk.Button(root, text="Exit", command=root.quit).pack(fill='x')
+            model_frame = tk.LabelFrame(root, text="Model Management")
+            model_frame.pack(fill="x", padx=10, pady=5)
+            tk.Button(model_frame, text="Select Model Path", command=self.select_model_path).pack(fill='x')
+            tk.Button(model_frame, text="Download Model from HuggingFace", command=self.download_model).pack(fill='x')
+
+            detection_frame = tk.LabelFrame(root, text="Detection Settings")
+            detection_frame.pack(fill="x", padx=10, pady=5)
+            tk.Button(detection_frame, text="Set Classes for Object Detection", command=self.set_class_name).pack(fill='x')
+            tk.Button(detection_frame, text="Set Phrase for Grounding", command=self.set_phrase).pack(fill='x')
+
+            toggle_frame = tk.LabelFrame(root, text="Toggle Features")
+            toggle_frame.pack(fill="x", padx=10, pady=5)
+            tk.Button(toggle_frame, text="Toggle Beep on Detection", command=self.toggle_beep).pack(fill='x')
+            tk.Button(toggle_frame, text="Toggle Screenshot on Detection", command=self.toggle_screenshot).pack(fill='x')
+            tk.Button(toggle_frame, text="Toggle Debug Mode", command=self.toggle_debug).pack(fill='x')
+            tk.Button(toggle_frame, text="Toggle Object Detection", command=self.toggle_object_detection).pack(fill='x')
+            tk.Button(toggle_frame, text="Toggle Phrase Grounding", command=self.toggle_phrase_grounding).pack(fill='x')
+
+            webcam_frame = tk.LabelFrame(root, text="Webcam Control")
+            webcam_frame.pack(fill="x", padx=10, pady=5)
+            tk.Button(webcam_frame, text="Start Webcam Detection", command=self.start_webcam_detection).pack(fill='x')
+            tk.Button(webcam_frame, text="Stop Webcam Detection", command=self.stop_webcam_detection).pack(fill='x')
+
+            tk.Button(root, text="Exit", command=root.quit).pack(fill='x', padx=10, pady=10)
+
+            self.caption_label = tk.Label(root, text="Phrase Grounding Caption: N/A")
+            self.caption_label.pack(fill='x')
+
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error creating menu: {e}{Style.RESET_ALL}")
 
