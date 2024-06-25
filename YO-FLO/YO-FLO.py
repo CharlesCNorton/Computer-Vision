@@ -19,6 +19,7 @@ class YO_FLO:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
         self.processor = None
+        self.scaler = torch.cuda.amp.GradScaler()
         self.class_name = None
         self.detections = []
         self.beep_active = False
@@ -36,10 +37,10 @@ class YO_FLO:
 
     def init_model(self, model_path):
         try:
-            self.model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device)
+            self.model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device).half()
             self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
             self.model_path = model_path
-            print(f"{Fore.GREEN}{Style.BRIGHT}Model loaded successfully from {model_path}{Style.RESET_ALL}")
+            print(f"{Fore.GREEN}{Style.BRIGHT}Model loaded successfully from {model_path} in fp16{Style.RESET_ALL}")
         except FileNotFoundError:
             print(f"{Fore.RED}{Style.BRIGHT}Model path not found: {model_path}{Style.RESET_ALL}")
         except Exception as e:
@@ -53,15 +54,21 @@ class YO_FLO:
             task_prompt = '<OD>'
             if self.debug: print(f"Running object detection with task prompt: {task_prompt}")
             inputs = self.processor(text=task_prompt, images=image, return_tensors="pt").to(self.device)
-            if self.debug: print(f"Inputs: {inputs}")
-            generated_ids = self.model.generate(
-                input_ids=inputs["input_ids"],
-                pixel_values=inputs.get("pixel_values"),
-                max_new_tokens=1024,
-                early_stopping=False,
-                do_sample=False,
-                num_beams=1,
-            )
+
+            for k, v in inputs.items():
+                if torch.is_floating_point(v):
+                    inputs[k] = v.half()
+
+            with torch.amp.autocast('cuda'):
+                generated_ids = self.model.generate(
+                    input_ids=inputs["input_ids"],
+                    pixel_values=inputs.get("pixel_values"),
+                    max_new_tokens=1024,
+                    early_stopping=False,
+                    do_sample=False,
+                    num_beams=1,
+                )
+
             if self.debug: print(f"Generated IDs: {generated_ids}")
             generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
             if self.debug: print(f"Generated text: {generated_text}")
@@ -83,15 +90,21 @@ class YO_FLO:
             if self.debug: print(f"Running phrase grounding with task prompt: {task_prompt} and phrase: {phrase}")
             inputs = self.processor(text=task_prompt, images=image, return_tensors="pt").to(self.device)
             inputs["input_ids"] = self.processor.tokenizer(phrase, return_tensors="pt").input_ids.to(self.device)
-            if self.debug: print(f"Inputs: {inputs}")
-            generated_ids = self.model.generate(
-                input_ids=inputs["input_ids"],
-                pixel_values=inputs.get("pixel_values"),
-                max_new_tokens=1024,
-                early_stopping=False,
-                do_sample=False,
-                num_beams=1,
-            )
+
+            for k, v in inputs.items():
+                if torch.is_floating_point(v):
+                    inputs[k] = v.half()
+
+            with torch.amp.autocast('cuda'):
+                generated_ids = self.model.generate(
+                    input_ids=inputs["input_ids"],
+                    pixel_values=inputs.get("pixel_values"),
+                    max_new_tokens=1024,
+                    early_stopping=False,
+                    do_sample=False,
+                    num_beams=1,
+                )
+
             if self.debug: print(f"Generated IDs: {generated_ids}")
             generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
             if self.debug: print(f"Generated text: {generated_text}")
