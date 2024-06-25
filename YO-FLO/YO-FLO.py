@@ -289,13 +289,23 @@ class YO_FLO:
             print(f"{Fore.RED}{Style.BRIGHT}OpenCV error: {e}{Style.RESET_ALL}")
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error during webcam detection: {e}{Style.RESET_ALL}")
+        finally:
+            cap.release()
+            cv2.destroyAllWindows()
 
     def stop_webcam_detection(self):
         if not self.webcam_thread or not self.webcam_thread.is_alive():
             print(f"{Fore.RED}{Style.BRIGHT}Webcam detection is not running.{Style.RESET_ALL}")
             return
+
+            self.object_detection_active = False
+        self.phrase_grounding_active = False
+
+        time.sleep(1)
+
         self.stop_webcam_flag.set()
         self.webcam_thread.join()
+        print(f"{Fore.GREEN}{Style.BRIGHT}Webcam detection stopped successfully.{Style.RESET_ALL}")
 
     def update_display(self):
         if not self.object_detection_active:
@@ -306,6 +316,17 @@ class YO_FLO:
     def main_menu(self):
         root = tk.Tk()
         root.title("YO-FLO Menu")
+
+        def on_closing():
+            self.stop_webcam_detection()
+            root.destroy()
+
+        def stop_webcam_with_delay():
+            self.stop_webcam_detection()
+            time.sleep(1)
+            root.destroy()
+
+        root.protocol("WM_DELETE_WINDOW", stop_webcam_with_delay)
 
         try:
             model_frame = tk.LabelFrame(root, text="Model Management")
@@ -331,7 +352,7 @@ class YO_FLO:
             tk.Button(webcam_frame, text="Start Webcam Detection", command=self.start_webcam_detection).pack(fill='x')
             tk.Button(webcam_frame, text="Stop Webcam Detection", command=self.stop_webcam_detection).pack(fill='x')
 
-            tk.Button(root, text="Exit", command=root.quit).pack(fill='x', padx=10, pady=10)
+            tk.Button(root, text="Exit", command=stop_webcam_with_delay).pack(fill='x', padx=10, pady=10)
 
             self.caption_label = tk.Label(root, text="Phrase Grounding Caption: N/A")
             self.caption_label.pack(fill='x')
