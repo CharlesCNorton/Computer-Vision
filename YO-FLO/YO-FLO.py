@@ -201,7 +201,12 @@ class YO_FLO:
 
     def update_caption_window(self, caption):
         if self.caption_label:
-            self.caption_label.config(text=caption)
+            if caption.lower() == "yes":
+                self.caption_label.config(text=caption, fg="green", bg="black", font=("Helvetica", 14, "bold"))
+            elif caption.lower() == "no":
+                self.caption_label.config(text=caption, fg="red", bg="black", font=("Helvetica", 14, "bold"))
+            else:
+                self.caption_label.config(text=caption, fg="white", bg="black", font=("Helvetica", 14, "bold"))
 
     def beep_sound(self):
         try:
@@ -251,7 +256,7 @@ class YO_FLO:
                         if self.debug: print(f"Phrase grounding enabled with phrase: {self.phrase}")
                         results = self.run_phrase_grounding(image_pil, self.phrase)
                         if results:
-                            caption = "Yes" if "yes" in results else "No"
+                            caption = "Yes" if "yes" in results.lower() else "No"
                             self.update_caption_window(caption)
 
                     if self.object_detection_active:
@@ -354,7 +359,7 @@ class YO_FLO:
 
             tk.Button(root, text="Exit", command=stop_webcam_with_delay).pack(fill='x', padx=10, pady=10)
 
-            self.caption_label = tk.Label(root, text="Phrase Grounding Caption: N/A")
+            self.caption_label = tk.Label(root, text="Phrase Grounding Caption: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
             self.caption_label.pack(fill='x')
 
         except Exception as e:
