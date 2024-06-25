@@ -298,10 +298,10 @@ class YO_FLO:
             print(f"{Fore.RED}{Style.BRIGHT}Webcam detection is not running.{Style.RESET_ALL}")
             return
 
-            self.object_detection_active = False
+        self.object_detection_active = False
         self.phrase_grounding_active = False
 
-        time.sleep(1)
+        time.sleep(2)
 
         self.stop_webcam_flag.set()
         self.webcam_thread.join()
@@ -323,7 +323,7 @@ class YO_FLO:
 
         def stop_webcam_with_delay():
             self.stop_webcam_detection()
-            time.sleep(1)
+            time.sleep(2)
             root.destroy()
 
         root.protocol("WM_DELETE_WINDOW", stop_webcam_with_delay)
