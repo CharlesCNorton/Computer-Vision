@@ -21,7 +21,7 @@ YO-FLO explores whether the new Florence foundational vision model can be implem
 
 - **Real-Time Object Detection**: Achieve YOLO-like performance using the Florence-2-base-ft model.
 - **Class-Specific Detection**: Specify the class of objects you want to detect (e.g., 'cat', 'dog').
-- **Phrase Grounding**: Detect objects based on specific phrases, answering yes or no questions for cool and exotic results.
+- **Expression Comprehension**: Detect objects based on specific phrases, answering yes or no questions for cool and exotic results.
 - **Beep and Screenshot on Detection**: Toggle options to beep and take screenshots when the target class or phrase is detected.
 - **Tkinter GUI**: A user-friendly graphical interface for easy interaction.
 - **Cross-Platform Compatibility**: Works on Windows, macOS, and Linux.
@@ -54,7 +54,7 @@ python YO-FLO.py
 1. **Select Model Path**: Choose a local directory containing the Florence model.
 2. **Download Model from HuggingFace**: Download and initialize the Florence-2-base-ft model from HuggingFace.
 3. **Set Class Name**: Specify the class name you want to detect (leave blank to show all detections).
-4. **Set Phrase**: Enter the phrase for grounding detection (e.g., 'a red car', 'a woman with a hat').
+4. **Set Phrase**: Enter the phrase for comprehension detection (e.g., 'a red car', 'a woman with a hat').
 5. **Toggle Beep on Detection**: Enable or disable the beep sound on detection.
 6. **Toggle Screenshot on Detection**: Enable or disable taking screenshots on detection.
 7. **Start Webcam Detection**: Begin real-time object detection using your webcam.

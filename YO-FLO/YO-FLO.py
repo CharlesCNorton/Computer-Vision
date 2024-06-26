@@ -32,7 +32,7 @@ class YO_FLO:
         self.debug = False
         self.caption_label = None
         self.object_detection_active = False
-        self.phrase_grounding_active = False
+        self.expression_comprehension_active = False
         self.webcam_thread = None
         self.inference_title = None
         self.inference_phrases = []
@@ -88,10 +88,10 @@ class YO_FLO:
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error running object detection: {e}{Style.RESET_ALL}")
 
-    def run_phrase_grounding(self, image, phrase):
+    def run_expression_comprehension(self, image, phrase):
         try:
-            task_prompt = '<CAPTION_TO_PHRASE_GROUNDING>'
-            if self.debug: print(f"Running phrase grounding with task prompt: {task_prompt} and phrase: {phrase}")
+            task_prompt = '<CAPTION_TO_EXPRESSION_COMPREHENSION>'
+            if self.debug: print(f"Running expression comprehension with task prompt: {task_prompt} and phrase: {phrase}")
             inputs = self.processor(text=task_prompt, images=image, return_tensors="pt").to(self.device)
             inputs["input_ids"] = self.processor.tokenizer(phrase, return_tensors="pt").input_ids.to(self.device)
 
@@ -114,7 +114,7 @@ class YO_FLO:
             if self.debug: print(f"Generated text: {generated_text}")
             return generated_text
         except Exception as e:
-            print(f"{Fore.RED}{Style.BRIGHT}Error running phrase grounding: {e}{Style.RESET_ALL}")
+            print(f"{Fore.RED}{Style.BRIGHT}Error running expression comprehension: {e}{Style.RESET_ALL}")
 
     def evaluate_inference_tree(self, image):
         try:
@@ -124,7 +124,7 @@ class YO_FLO:
 
             results = []
             for phrase in self.inference_phrases:
-                result = self.run_phrase_grounding(image, phrase)
+                result = self.run_expression_comprehension(image, phrase)
                 if result:
                     if "yes" in result.lower():
                         results.append(True)
@@ -189,9 +189,9 @@ class YO_FLO:
             phrase = simpledialog.askstring("Set Phrase", "Enter the yes or no question you want answered (e.g., 'Is the person smiling?', 'Is the cat laying down?'):")
             self.phrase = phrase if phrase else None
             if self.phrase:
-                print(f"{Fore.GREEN}{Style.BRIGHT}Set to ground: {self.phrase}{Style.RESET_ALL}")
+                print(f"{Fore.GREEN}{Style.BRIGHT}Set to comprehend: {self.phrase}{Style.RESET_ALL}")
             else:
-                print(f"{Fore.GREEN}{Style.BRIGHT}No phrase set for grounding{Style.RESET_ALL}")
+                print(f"{Fore.GREEN}{Style.BRIGHT}No phrase set for comprehension{Style.RESET_ALL}")
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error setting phrase: {e}{Style.RESET_ALL}")
 
@@ -250,13 +250,13 @@ class YO_FLO:
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error toggling object detection: {e}{Style.RESET_ALL}")
 
-    def toggle_phrase_grounding(self):
+    def toggle_expression_comprehension(self):
         try:
-            self.phrase_grounding_active = not self.phrase_grounding_active
-            status = "enabled" if self.phrase_grounding_active else "disabled"
-            print(f"{Fore.GREEN}{Style.BRIGHT}Phrase grounding is now {status}{Style.RESET_ALL}")
+            self.expression_comprehension_active = not self.expression_comprehension_active
+            status = "enabled" if self.expression_comprehension_active else "disabled"
+            print(f"{Fore.GREEN}{Style.BRIGHT}Expression comprehension is now {status}{Style.RESET_ALL}")
         except Exception as e:
-            print(f"{Fore.RED}{Style.BRIGHT}Error toggling phrase grounding: {e}{Style.RESET_ALL}")
+            print(f"{Fore.RED}{Style.BRIGHT}Error toggling expression comprehension: {e}{Style.RESET_ALL}")
 
     def toggle_inference_tree(self):
         try:
@@ -326,9 +326,9 @@ class YO_FLO:
                     image_pil = Image.fromarray(image)
                     if self.debug: print(f"Captured frame from webcam")
 
-                    if self.phrase_grounding_active and self.phrase:
-                        if self.debug: print(f"Phrase grounding enabled with phrase: {self.phrase}")
-                        results = self.run_phrase_grounding(image_pil, self.phrase)
+                    if self.expression_comprehension_active and self.phrase:
+                        if self.debug: print(f"Expression comprehension enabled with phrase: {self.phrase}")
+                        results = self.run_expression_comprehension(image_pil, self.phrase)
                         if results:
                             caption = "Yes" if "yes" in results.lower() else "No"
                             self.update_caption_window(caption)
@@ -382,7 +382,7 @@ class YO_FLO:
             return
 
         self.object_detection_active = False
-        self.phrase_grounding_active = False
+        self.expression_comprehension_active = False
         self.inference_tree_active = False
 
         time.sleep(2)
@@ -421,7 +421,7 @@ class YO_FLO:
             detection_frame = tk.LabelFrame(root, text="Detection Settings")
             detection_frame.pack(fill="x", padx=10, pady=5)
             tk.Button(detection_frame, text="Set Classes for Object Detection", command=self.set_class_name).pack(fill='x')
-            tk.Button(detection_frame, text="Set Phrase for Grounding", command=self.set_phrase).pack(fill='x')
+            tk.Button(detection_frame, text="Set Phrase for Yes/No Comprehension", command=self.set_phrase).pack(fill='x')
             tk.Button(detection_frame, text="Set Inference Tree", command=self.set_inference_tree).pack(fill='x')
 
             toggle_frame = tk.LabelFrame(root, text="Toggle Features")
@@ -430,7 +430,7 @@ class YO_FLO:
             tk.Button(toggle_frame, text="Toggle Screenshot on Detection", command=self.toggle_screenshot).pack(fill='x')
             tk.Button(toggle_frame, text="Toggle Debug Mode", command=self.toggle_debug).pack(fill='x')
             tk.Button(toggle_frame, text="Toggle Object Detection", command=self.toggle_object_detection).pack(fill='x')
-            tk.Button(toggle_frame, text="Toggle Phrase Grounding", command=self.toggle_phrase_grounding).pack(fill='x')
+            tk.Button(toggle_frame, text="Toggle Yes/No Comprehension", command=self.toggle_expression_comprehension).pack(fill='x')
             tk.Button(toggle_frame, text="Toggle Inference Tree", command=self.toggle_inference_tree).pack(fill='x')
 
             webcam_frame = tk.LabelFrame(root, text="Webcam Control")
@@ -440,7 +440,7 @@ class YO_FLO:
 
             tk.Button(root, text="Exit", command=stop_webcam_with_delay).pack(fill='x', padx=10, pady=10)
 
-            self.caption_label = tk.Label(root, text="Phrase Grounding Caption: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
+            self.caption_label = tk.Label(root, text="Yes/No Comprehension Caption: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
             self.caption_label.pack(fill='x')
             self.inference_result_label = tk.Label(root, text="Inference Result: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
             self.inference_result_label.pack(fill='x')
