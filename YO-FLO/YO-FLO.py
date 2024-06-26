@@ -34,6 +34,10 @@ class YO_FLO:
         self.object_detection_active = False
         self.phrase_grounding_active = False
         self.webcam_thread = None
+        self.inference_title = None
+        self.inference_phrases = []
+        self.inference_result_label = None
+        self.inference_tree_active = False
 
     def init_model(self, model_path):
         try:
@@ -112,6 +116,28 @@ class YO_FLO:
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error running phrase grounding: {e}{Style.RESET_ALL}")
 
+    def evaluate_inference_tree(self, image):
+        try:
+            if not self.inference_phrases:
+                print(f"{Fore.RED}{Style.BRIGHT}No inference phrases set.{Style.RESET_ALL}")
+                return "FAIL"
+
+            results = []
+            for phrase in self.inference_phrases:
+                result = self.run_phrase_grounding(image, phrase)
+                if result:
+                    if "yes" in result.lower():
+                        results.append(True)
+                    else:
+                        results.append(False)
+
+            if all(results):
+                return "PASS"
+            else:
+                return "FAIL"
+        except Exception as e:
+            print(f"{Fore.RED}{Style.BRIGHT}Error evaluating inference tree: {e}{Style.RESET_ALL}")
+
     def plot_bbox(self, image):
         try:
             if not self.detections:
@@ -169,6 +195,26 @@ class YO_FLO:
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error setting phrase: {e}{Style.RESET_ALL}")
 
+    def set_inference_tree(self):
+        try:
+            self.inference_title = simpledialog.askstring("Inference Title", "Enter the title for the inference tree:")
+            self.inference_phrases = []
+            for i in range(3):
+                phrase = simpledialog.askstring("Set Inference Phrase", f"Enter inference phrase {i+1} (e.g., 'Is it cloudy?', 'Is it wet?'):")
+                if phrase:
+                    self.inference_phrases.append(phrase)
+                else:
+                    print(f"{Fore.YELLOW}{Style.BRIGHT}Cancelled setting inference phrase {i+1}.{Style.RESET_ALL}")
+                    return
+            if self.inference_title and self.inference_phrases:
+                print(f"{Fore.GREEN}{Style.BRIGHT}Inference tree set with title: {self.inference_title}{Style.RESET_ALL}")
+                for phrase in self.inference_phrases:
+                    print(f"{Fore.GREEN}{Style.BRIGHT}Inference phrase: {phrase}{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.YELLOW}{Style.BRIGHT}Inference tree setting cancelled.{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}{Style.BRIGHT}Error setting inference tree: {e}{Style.RESET_ALL}")
+
     def toggle_beep(self):
         try:
             self.beep_active = not self.beep_active
@@ -212,6 +258,14 @@ class YO_FLO:
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error toggling phrase grounding: {e}{Style.RESET_ALL}")
 
+    def toggle_inference_tree(self):
+        try:
+            self.inference_tree_active = not self.inference_tree_active
+            status = "enabled" if self.inference_tree_active else "disabled"
+            print(f"{Fore.GREEN}{Style.BRIGHT}Inference tree evaluation is now {status}{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}{Style.BRIGHT}Error toggling inference tree: {e}{Style.RESET_ALL}")
+
     def update_caption_window(self, caption):
         if self.caption_label:
             if caption.lower() == "yes":
@@ -220,6 +274,13 @@ class YO_FLO:
                 self.caption_label.config(text=caption, fg="red", bg="black", font=("Helvetica", 14, "bold"))
             else:
                 self.caption_label.config(text=caption, fg="white", bg="black", font=("Helvetica", 14, "bold"))
+
+    def update_inference_result_window(self, result):
+        if self.inference_result_label:
+            if result.lower() == "pass":
+                self.inference_result_label.config(text=result, fg="green", bg="black", font=("Helvetica", 14, "bold"))
+            else:
+                self.inference_result_label.config(text=result, fg="red", bg="black", font=("Helvetica", 14, "bold"))
 
     def beep_sound(self):
         try:
@@ -284,6 +345,10 @@ class YO_FLO:
                                     if self.class_name and label.lower() == self.class_name.lower():
                                         self.target_detected = True
 
+                    if self.inference_tree_active and self.inference_title and self.inference_phrases:
+                        inference_result = self.evaluate_inference_tree(image_pil)
+                        self.update_inference_result_window(inference_result)
+
                     bbox_image = self.plot_bbox(frame.copy())
                     cv2.imshow('Object Detection', bbox_image)
 
@@ -318,6 +383,7 @@ class YO_FLO:
 
         self.object_detection_active = False
         self.phrase_grounding_active = False
+        self.inference_tree_active = False
 
         time.sleep(2)
 
@@ -356,6 +422,7 @@ class YO_FLO:
             detection_frame.pack(fill="x", padx=10, pady=5)
             tk.Button(detection_frame, text="Set Classes for Object Detection", command=self.set_class_name).pack(fill='x')
             tk.Button(detection_frame, text="Set Phrase for Grounding", command=self.set_phrase).pack(fill='x')
+            tk.Button(detection_frame, text="Set Inference Tree", command=self.set_inference_tree).pack(fill='x')
 
             toggle_frame = tk.LabelFrame(root, text="Toggle Features")
             toggle_frame.pack(fill="x", padx=10, pady=5)
@@ -364,6 +431,7 @@ class YO_FLO:
             tk.Button(toggle_frame, text="Toggle Debug Mode", command=self.toggle_debug).pack(fill='x')
             tk.Button(toggle_frame, text="Toggle Object Detection", command=self.toggle_object_detection).pack(fill='x')
             tk.Button(toggle_frame, text="Toggle Phrase Grounding", command=self.toggle_phrase_grounding).pack(fill='x')
+            tk.Button(toggle_frame, text="Toggle Inference Tree", command=self.toggle_inference_tree).pack(fill='x')
 
             webcam_frame = tk.LabelFrame(root, text="Webcam Control")
             webcam_frame.pack(fill="x", padx=10, pady=5)
@@ -374,6 +442,8 @@ class YO_FLO:
 
             self.caption_label = tk.Label(root, text="Phrase Grounding Caption: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
             self.caption_label.pack(fill='x')
+            self.inference_result_label = tk.Label(root, text="Inference Result: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
+            self.inference_result_label.pack(fill='x')
 
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error creating menu: {e}{Style.RESET_ALL}")
