@@ -33,6 +33,8 @@ class YO_FLO:
         self.caption_label = None
         self.object_detection_active = False
         self.expression_comprehension_active = False
+        self.visual_grounding_active = False
+        self.visual_grounding_phrase = None
         self.webcam_thread = None
         self.inference_title = None
         self.inference_phrases = []
@@ -138,6 +140,45 @@ class YO_FLO:
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error evaluating inference tree: {e}{Style.RESET_ALL}")
 
+    def run_visual_grounding(self, image, phrase):
+        try:
+            task_prompt = '<CAPTION_TO_PHRASE_GROUNDING>'
+            inputs = self.processor(text=task_prompt, images=image, return_tensors="pt").to(self.device)
+
+            phrase_inputs = self.processor.tokenizer(phrase, return_tensors="pt").input_ids.to(self.device)
+            inputs["input_ids"] = torch.cat([inputs["input_ids"], phrase_inputs[:, 1:]], dim=1)  # Merge phrase inputs
+
+            for k, v in inputs.items():
+                if torch.is_floating_point(v):
+                    inputs[k] = v.half()
+
+            if self.debug: print(f"Inputs to model: {inputs}")
+
+            with torch.amp.autocast("cuda"):
+                generated_ids = self.model.generate(
+                    input_ids=inputs["input_ids"],
+                    pixel_values=inputs.get("pixel_values"),
+                    max_new_tokens=1024,
+                    early_stopping=False,
+                    do_sample=False,
+                    num_beams=1,
+                )
+
+            generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+
+            if self.debug: print(f"Generated text: {generated_text}")
+
+            parsed_answer = self.processor.post_process_generation(generated_text, task=task_prompt, image_size=image.size)
+
+            if self.debug: print(f"Parsed answer: {parsed_answer}")
+
+            if task_prompt in parsed_answer and parsed_answer[task_prompt]['bboxes']:
+                return parsed_answer[task_prompt]['bboxes'][0]
+            else:
+                return None
+        except Exception as e:
+            print(f"{Fore.RED}{Style.BRIGHT}Error running visual grounding: {e}{Style.RESET_ALL}")
+
     def plot_bbox(self, image):
         try:
             if not self.detections:
@@ -149,6 +190,16 @@ class YO_FLO:
             return image
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error plotting bounding boxes: {e}{Style.RESET_ALL}")
+
+    def plot_visual_grounding_bbox(self, image, bbox, phrase):
+        try:
+            if bbox:
+                x1, y1, x2, y2 = map(int, bbox[:4])
+                cv2.rectangle(image, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                cv2.putText(image, phrase, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+            return image
+        except Exception as e:
+            print(f"{Fore.RED}{Style.BRIGHT}Error plotting visual grounding bounding box: {e}{Style.RESET_ALL}")
 
     def select_model_path(self):
         try:
@@ -194,6 +245,17 @@ class YO_FLO:
                 print(f"{Fore.GREEN}{Style.BRIGHT}No phrase set for comprehension{Style.RESET_ALL}")
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error setting phrase: {e}{Style.RESET_ALL}")
+
+    def set_visual_grounding_phrase(self):
+        try:
+            phrase = simpledialog.askstring("Set Visual Grounding Phrase", "Enter the phrase for visual grounding:")
+            self.visual_grounding_phrase = phrase if phrase else None
+            if self.visual_grounding_phrase:
+                print(f"{Fore.GREEN}{Style.BRIGHT}Set visual grounding phrase: {self.visual_grounding_phrase}{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.GREEN}{Style.BRIGHT}No phrase set for visual grounding{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}{Style.BRIGHT}Error setting visual grounding phrase: {e}{Style.RESET_ALL}")
 
     def set_inference_tree(self):
         try:
@@ -257,6 +319,14 @@ class YO_FLO:
             print(f"{Fore.GREEN}{Style.BRIGHT}Expression comprehension is now {status}{Style.RESET_ALL}")
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error toggling expression comprehension: {e}{Style.RESET_ALL}")
+
+    def toggle_visual_grounding(self):
+        try:
+            self.visual_grounding_active = not self.visual_grounding_active
+            status = "enabled" if self.visual_grounding_active else "disabled"
+            print(f"{Fore.GREEN}{Style.BRIGHT}Visual grounding is now {status}{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}{Style.BRIGHT}Error toggling visual grounding: {e}{Style.RESET_ALL}")
 
     def toggle_inference_tree(self):
         try:
@@ -345,6 +415,12 @@ class YO_FLO:
                                     if self.class_name and label.lower() == self.class_name.lower():
                                         self.target_detected = True
 
+                    if self.visual_grounding_active and self.visual_grounding_phrase:
+                        if self.debug: print(f"Running visual grounding with phrase: {self.visual_grounding_phrase}")
+                        bbox = self.run_visual_grounding(image_pil, self.visual_grounding_phrase)
+                        if bbox:
+                            frame = self.plot_visual_grounding_bbox(frame, bbox, self.visual_grounding_phrase)
+
                     if self.inference_tree_active and self.inference_title and self.inference_phrases:
                         inference_result = self.evaluate_inference_tree(image_pil)
                         self.update_inference_result_window(inference_result)
@@ -379,13 +455,13 @@ class YO_FLO:
     def stop_webcam_detection(self):
         if not self.webcam_thread or not self.webcam_thread.is_alive():
             print(f"{Fore.RED}{Style.BRIGHT}Webcam detection is not running.{Style.RESET_ALL}")
-            return
 
         self.object_detection_active = False
         self.expression_comprehension_active = False
+        self.visual_grounding_active = False
         self.inference_tree_active = False
 
-        time.sleep(2)
+        time.sleep(3)
 
         self.stop_webcam_flag.set()
         self.webcam_thread.join()
@@ -407,7 +483,7 @@ class YO_FLO:
 
         def stop_webcam_with_delay():
             self.stop_webcam_detection()
-            time.sleep(2)
+            time.sleep(3)
             root.destroy()
 
         root.protocol("WM_DELETE_WINDOW", stop_webcam_with_delay)
@@ -422,6 +498,7 @@ class YO_FLO:
             detection_frame.pack(fill="x", padx=10, pady=5)
             tk.Button(detection_frame, text="Set Classes for Object Detection", command=self.set_class_name).pack(fill='x')
             tk.Button(detection_frame, text="Set Phrase for Yes/No Comprehension", command=self.set_phrase).pack(fill='x')
+            tk.Button(detection_frame, text="Set Visual Grounding Phrase", command=self.set_visual_grounding_phrase).pack(fill='x')
             tk.Button(detection_frame, text="Set Inference Tree", command=self.set_inference_tree).pack(fill='x')
 
             toggle_frame = tk.LabelFrame(root, text="Toggle Features")
@@ -431,6 +508,7 @@ class YO_FLO:
             tk.Button(toggle_frame, text="Toggle Debug Mode", command=self.toggle_debug).pack(fill='x')
             tk.Button(toggle_frame, text="Toggle Object Detection", command=self.toggle_object_detection).pack(fill='x')
             tk.Button(toggle_frame, text="Toggle Yes/No Comprehension", command=self.toggle_expression_comprehension).pack(fill='x')
+            tk.Button(toggle_frame, text="Toggle Visual Grounding", command=self.toggle_visual_grounding).pack(fill='x')
             tk.Button(toggle_frame, text="Toggle Inference Tree", command=self.toggle_inference_tree).pack(fill='x')
 
             webcam_frame = tk.LabelFrame(root, text="Webcam Control")
@@ -440,9 +518,9 @@ class YO_FLO:
 
             tk.Button(root, text="Exit", command=stop_webcam_with_delay).pack(fill='x', padx=10, pady=10)
 
-            self.caption_label = tk.Label(root, text="Yes/No Comprehension Caption: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
+            self.caption_label = tk.Label(root, text="Binary Inference: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
             self.caption_label.pack(fill='x')
-            self.inference_result_label = tk.Label(root, text="Inference Result: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
+            self.inference_result_label = tk.Label(root, text="Inference Tree: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
             self.inference_result_label.pack(fill='x')
 
         except Exception as e:
