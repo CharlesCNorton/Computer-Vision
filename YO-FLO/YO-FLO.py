@@ -19,6 +19,7 @@ class YO_FLO:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
         self.processor = None
+        self.inference_phrases_result_labels = []
         self.scaler = torch.cuda.amp.GradScaler()
         self.class_name = None
         self.detections = []
@@ -122,23 +123,25 @@ class YO_FLO:
         try:
             if not self.inference_phrases:
                 print(f"{Fore.RED}{Style.BRIGHT}No inference phrases set.{Style.RESET_ALL}")
-                return "FAIL"
+                return "FAIL", []
 
             results = []
+            phrase_results = []
             for phrase in self.inference_phrases:
                 result = self.run_expression_comprehension(image, phrase)
                 if result:
                     if "yes" in result.lower():
                         results.append(True)
+                        phrase_results.append(True)
                     else:
                         results.append(False)
+                        phrase_results.append(False)
 
-            if all(results):
-                return "PASS"
-            else:
-                return "FAIL"
+            overall_result = "PASS" if all(results) else "FAIL"
+            return overall_result, phrase_results
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error evaluating inference tree: {e}{Style.RESET_ALL}")
+            return "FAIL", []
 
     def run_visual_grounding(self, image, phrase):
         try:
@@ -345,12 +348,19 @@ class YO_FLO:
             else:
                 self.caption_label.config(text=caption, fg="white", bg="black", font=("Helvetica", 14, "bold"))
 
-    def update_inference_result_window(self, result):
+    def update_inference_result_window(self, result, phrase_results):
         if self.inference_result_label:
             if result.lower() == "pass":
                 self.inference_result_label.config(text=result, fg="green", bg="black", font=("Helvetica", 14, "bold"))
             else:
                 self.inference_result_label.config(text=result, fg="red", bg="black", font=("Helvetica", 14, "bold"))
+
+        for idx, phrase_result in enumerate(phrase_results):
+            label = self.inference_phrases_result_labels[idx]
+            if phrase_result:
+                label.config(text=f"Inference {idx+1}: PASS", fg="green", bg="black", font=("Helvetica", 14, "bold"))
+            else:
+                label.config(text=f"Inference {idx+1}: FAIL", fg="red", bg="black", font=("Helvetica", 14, "bold"))
 
     def beep_sound(self):
         try:
@@ -422,8 +432,8 @@ class YO_FLO:
                             frame = self.plot_visual_grounding_bbox(frame, bbox, self.visual_grounding_phrase)
 
                     if self.inference_tree_active and self.inference_title and self.inference_phrases:
-                        inference_result = self.evaluate_inference_tree(image_pil)
-                        self.update_inference_result_window(inference_result)
+                        inference_result, phrase_results = self.evaluate_inference_tree(image_pil)
+                        self.update_inference_result_window(inference_result, phrase_results)
 
                     bbox_image = self.plot_bbox(frame.copy())
                     cv2.imshow('Object Detection', bbox_image)
@@ -531,11 +541,15 @@ class YO_FLO:
             self.inference_result_label = tk.Label(root, text="Inference Tree: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
             self.inference_result_label.pack(fill='x')
 
+            for i in range(3):
+                label = tk.Label(root, text=f"Inference {i+1}: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
+                label.pack(fill='x')
+                self.inference_phrases_result_labels.append(label)
+
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error creating menu: {e}{Style.RESET_ALL}")
 
         root.mainloop()
-
 
 if __name__ == "__main__":
     try:
