@@ -497,29 +497,37 @@ class YO_FLO:
             detection_frame = tk.LabelFrame(root, text="Detection Settings")
             detection_frame.pack(fill="x", padx=10, pady=5)
             tk.Button(detection_frame, text="Set Classes for Object Detection", command=self.set_class_name).pack(fill='x')
-            tk.Button(detection_frame, text="Set Phrase for Yes/No Comprehension", command=self.set_phrase).pack(fill='x')
-            tk.Button(detection_frame, text="Set Visual Grounding Phrase", command=self.set_visual_grounding_phrase).pack(fill='x')
+            tk.Button(detection_frame, text="Set Phrase for Yes/No Inference", command=self.set_phrase).pack(fill='x')
+            tk.Button(detection_frame, text="Set Grounding Phrase", command=self.set_visual_grounding_phrase).pack(fill='x')
             tk.Button(detection_frame, text="Set Inference Tree", command=self.set_inference_tree).pack(fill='x')
 
-            toggle_frame = tk.LabelFrame(root, text="Toggle Features")
-            toggle_frame.pack(fill="x", padx=10, pady=5)
-            tk.Button(toggle_frame, text="Toggle Beep on Detection", command=self.toggle_beep).pack(fill='x')
-            tk.Button(toggle_frame, text="Toggle Screenshot on Detection", command=self.toggle_screenshot).pack(fill='x')
-            tk.Button(toggle_frame, text="Toggle Debug Mode", command=self.toggle_debug).pack(fill='x')
-            tk.Button(toggle_frame, text="Toggle Object Detection", command=self.toggle_object_detection).pack(fill='x')
-            tk.Button(toggle_frame, text="Toggle Yes/No Comprehension", command=self.toggle_expression_comprehension).pack(fill='x')
-            tk.Button(toggle_frame, text="Toggle Visual Grounding", command=self.toggle_visual_grounding).pack(fill='x')
-            tk.Button(toggle_frame, text="Toggle Inference Tree", command=self.toggle_inference_tree).pack(fill='x')
+            toggle_features_frame = tk.LabelFrame(root, text="Toggle Features")
+            toggle_features_frame.pack(fill="x", padx=10, pady=5)
+            tk.Button(toggle_features_frame, text="Toggle Object Detection", command=self.toggle_object_detection).pack(fill='x')
+            tk.Button(toggle_features_frame, text="Toggle Yes/No Inference", command=self.toggle_expression_comprehension).pack(fill='x')
+            tk.Button(toggle_features_frame, text="Toggle Visual Grounding", command=self.toggle_visual_grounding).pack(fill='x')
+            tk.Button(toggle_features_frame, text="Toggle Inference Tree", command=self.toggle_inference_tree).pack(fill='x')
+
+            toggle_triggers_frame = tk.LabelFrame(root, text="Toggle Triggers")
+            toggle_triggers_frame.pack(fill="x", padx=10, pady=5)
+            tk.Button(toggle_triggers_frame, text="Toggle Beep on Detection", command=self.toggle_beep).pack(fill='x')
+            tk.Button(toggle_triggers_frame, text="Toggle Screenshot on Detection", command=self.toggle_screenshot).pack(fill='x')
 
             webcam_frame = tk.LabelFrame(root, text="Webcam Control")
             webcam_frame.pack(fill="x", padx=10, pady=5)
             tk.Button(webcam_frame, text="Start Webcam Detection", command=self.start_webcam_detection).pack(fill='x')
             tk.Button(webcam_frame, text="Stop Webcam Detection", command=self.stop_webcam_detection).pack(fill='x')
 
+            tk.Button(root, text="Toggle Debug Mode", command=self.toggle_debug).pack(fill='x', padx=10, pady=10)
+
             tk.Button(root, text="Exit", command=stop_webcam_with_delay).pack(fill='x', padx=10, pady=10)
 
             self.caption_label = tk.Label(root, text="Binary Inference: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
             self.caption_label.pack(fill='x')
+
+            divider_frame = tk.Frame(root, height=2, bd=1, relief=tk.SUNKEN)
+            divider_frame.pack(fill='x', padx=5, pady=5)
+
             self.inference_result_label = tk.Label(root, text="Inference Tree: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
             self.inference_result_label.pack(fill='x')
 
@@ -527,6 +535,7 @@ class YO_FLO:
             print(f"{Fore.RED}{Style.BRIGHT}Error creating menu: {e}{Style.RESET_ALL}")
 
         root.mainloop()
+
 
 if __name__ == "__main__":
     try:
