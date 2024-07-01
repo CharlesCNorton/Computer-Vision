@@ -309,6 +309,7 @@ class YO_FLO:
             self.object_detection_active = not self.object_detection_active
             if not self.object_detection_active:
                 self.detections.clear()
+                self.class_name = None
                 self.update_display()
             status = "enabled" if self.object_detection_active else "disabled"
             print(f"{Fore.GREEN}{Style.BRIGHT}Object detection is now {status}{Style.RESET_ALL}")
