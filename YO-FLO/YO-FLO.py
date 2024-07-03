@@ -18,6 +18,7 @@ class YO_FLO:
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
+        self.headless_mode = False
         self.processor = None
         self.inference_phrases_result_labels = []
         self.scaler = torch.cuda.amp.GradScaler()
@@ -52,6 +53,14 @@ class YO_FLO:
             print(f"{Fore.RED}{Style.BRIGHT}Model path not found: {model_path}{Style.RESET_ALL}")
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error loading model: {e}{Style.RESET_ALL}")
+
+    def toggle_headless(self):
+        try:
+            self.headless_mode = not self.headless_mode
+            status = "enabled" if self.headless_mode else "disabled"
+            print(f"{Fore.GREEN}{Style.BRIGHT}Headless mode is now {status}{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}{Style.BRIGHT}Error toggling headless mode: {e}{Style.RESET_ALL}")
 
     def run_object_detection(self, image):
         try:
@@ -413,6 +422,8 @@ class YO_FLO:
                         if results:
                             caption = "Yes" if "yes" in results.lower() else "No"
                             self.update_caption_window(caption)
+                            if self.headless_mode:
+                                print(f"Expression comprehension result: {caption}")
 
                     if self.object_detection_active:
                         if self.debug: print(f"Running object detection")
@@ -425,31 +436,42 @@ class YO_FLO:
                                     self.detections.append((bbox, label))
                                     if self.class_name and label.lower() == self.class_name.lower():
                                         self.target_detected = True
+                            if self.headless_mode:
+                                print(f"Object Detection results: {self.detections}")
 
                     if self.visual_grounding_active and self.visual_grounding_phrase:
                         if self.debug: print(f"Running visual grounding with phrase: {self.visual_grounding_phrase}")
                         bbox = self.run_visual_grounding(image_pil, self.visual_grounding_phrase)
                         if bbox:
-                            frame = self.plot_visual_grounding_bbox(frame, bbox, self.visual_grounding_phrase)
+                            if not self.headless_mode:
+                                frame = self.plot_visual_grounding_bbox(frame, bbox, self.visual_grounding_phrase)
+                            else:
+                                print(f"Visual Grounding result: {bbox}")
 
                     if self.inference_tree_active and self.inference_title and self.inference_phrases:
                         inference_result, phrase_results = self.evaluate_inference_tree(image_pil)
                         self.update_inference_result_window(inference_result, phrase_results)
+                        if self.headless_mode:
+                            print(f"Inference Tree result: {inference_result}, Details: {phrase_results}")
 
-                    bbox_image = self.plot_bbox(frame.copy())
-                    cv2.imshow('Object Detection', bbox_image)
+                    if not self.headless_mode:
+                        bbox_image = self.plot_bbox(frame.copy())
+                        cv2.imshow('Object Detection', bbox_image)
 
-                    current_time = time.time()
-                    if self.beep_active and self.target_detected and current_time - self.last_beep_time > 1:
-                        threading.Thread(target=self.beep_sound).start()
-                        if self.debug: print(f"{Fore.GREEN}{Style.BRIGHT}Target detected: {self.class_name}{Style.RESET_ALL}")
-                        self.last_beep_time = current_time
+                        current_time = time.time()
+                        if self.beep_active and self.target_detected and current_time - self.last_beep_time > 1:
+                            threading.Thread(target=self.beep_sound).start()
+                            if self.debug: print(f"{Fore.GREEN}{Style.BRIGHT}Target detected: {self.class_name}{Style.RESET_ALL}")
+                            self.last_beep_time = current_time
 
-                    if self.screenshot_active and self.target_detected:
-                        self.save_screenshot(bbox_image)
+                        if self.screenshot_active and self.target_detected:
+                            self.save_screenshot(bbox_image)
 
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        break
+                        if cv2.waitKey(1) & 0xFF == ord('q'):
+                            break
+                    else:
+                        if cv2.waitKey(1) & 0xFF == ord('q'):
+                            break
                 except Exception as e:
                     print(f"{Fore.RED}{Style.BRIGHT}Error during frame processing: {e}{Style.RESET_ALL}")
 
@@ -462,6 +484,7 @@ class YO_FLO:
         finally:
             cap.release()
             cv2.destroyAllWindows()
+
 
     def stop_webcam_detection(self):
         if not self.webcam_thread or not self.webcam_thread.is_alive():
@@ -518,6 +541,7 @@ class YO_FLO:
             tk.Button(toggle_features_frame, text="Toggle Yes/No Inference", command=self.toggle_expression_comprehension).pack(fill='x')
             tk.Button(toggle_features_frame, text="Toggle Visual Grounding", command=self.toggle_visual_grounding).pack(fill='x')
             tk.Button(toggle_features_frame, text="Toggle Inference Tree", command=self.toggle_inference_tree).pack(fill='x')
+            tk.Button(toggle_features_frame, text="Toggle Headless Mode", command=self.toggle_headless).pack(fill='x')
 
             toggle_triggers_frame = tk.LabelFrame(root, text="Toggle Triggers")
             toggle_triggers_frame.pack(fill="x", padx=10, pady=5)
