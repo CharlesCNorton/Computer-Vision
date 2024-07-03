@@ -22,6 +22,9 @@ class YO_FLO:
         self.processor = None
         self.inference_phrases_result_labels = []
         self.scaler = torch.cuda.amp.GradScaler()
+        self.inference_start_time = None
+        self.inference_count = 0
+        self.inference_rate_label = None
         self.class_name = None
         self.detections = []
         self.beep_active = False
@@ -53,6 +56,15 @@ class YO_FLO:
             print(f"{Fore.RED}{Style.BRIGHT}Model path not found: {model_path}{Style.RESET_ALL}")
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error loading model: {e}{Style.RESET_ALL}")
+
+    def update_inference_rate(self):
+        if self.inference_start_time is None:
+            self.inference_start_time = time.time()
+        else:
+            elapsed_time = time.time() - self.inference_start_time
+            if elapsed_time > 0:
+                inferences_per_second = self.inference_count / elapsed_time
+                self.inference_rate_label.config(text=f"Inferences/sec: {inferences_per_second:.2f}", fg="green")
 
     def toggle_headless(self):
         try:
@@ -424,6 +436,8 @@ class YO_FLO:
                             self.update_caption_window(caption)
                             if self.headless_mode:
                                 print(f"Expression comprehension result: {caption}")
+                            self.inference_count += 1
+                            self.update_inference_rate()
 
                     if self.object_detection_active:
                         if self.debug: print(f"Running object detection")
@@ -438,6 +452,8 @@ class YO_FLO:
                                         self.target_detected = True
                             if self.headless_mode:
                                 print(f"Object Detection results: {self.detections}")
+                            self.inference_count += 1
+                            self.update_inference_rate()
 
                     if self.visual_grounding_active and self.visual_grounding_phrase:
                         if self.debug: print(f"Running visual grounding with phrase: {self.visual_grounding_phrase}")
@@ -447,12 +463,16 @@ class YO_FLO:
                                 frame = self.plot_visual_grounding_bbox(frame, bbox, self.visual_grounding_phrase)
                             else:
                                 print(f"Visual Grounding result: {bbox}")
+                            self.inference_count += 1
+                            self.update_inference_rate()
 
                     if self.inference_tree_active and self.inference_title and self.inference_phrases:
                         inference_result, phrase_results = self.evaluate_inference_tree(image_pil)
                         self.update_inference_result_window(inference_result, phrase_results)
                         if self.headless_mode:
                             print(f"Inference Tree result: {inference_result}, Details: {phrase_results}")
+                        self.inference_count += 1
+                        self.update_inference_rate()
 
                     if not self.headless_mode:
                         bbox_image = self.plot_bbox(frame.copy())
@@ -484,7 +504,6 @@ class YO_FLO:
         finally:
             cap.release()
             cv2.destroyAllWindows()
-
 
     def stop_webcam_detection(self):
         if not self.webcam_thread or not self.webcam_thread.is_alive():
@@ -555,19 +574,23 @@ class YO_FLO:
 
             tk.Button(root, text="Toggle Debug Mode", command=self.toggle_debug).pack(fill='x', padx=10, pady=10)
 
-            tk.Button(root, text="Exit", command=stop_webcam_with_delay).pack(fill='x', padx=10, pady=10)
+            inference_rate_frame = tk.LabelFrame(root, text="Inference Rate")
+            inference_rate_frame.pack(fill="x", padx=10, pady=5)
+            self.inference_rate_label = tk.Label(inference_rate_frame, text="Inferences/sec: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
+            self.inference_rate_label.pack(fill='x')
 
-            self.caption_label = tk.Label(root, text="Binary Inference: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
+            binary_inference_frame = tk.LabelFrame(root, text="Binary Inference")
+            binary_inference_frame.pack(fill="x", padx=10, pady=5)
+            self.caption_label = tk.Label(binary_inference_frame, text="Binary Inference: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
             self.caption_label.pack(fill='x')
 
-            divider_frame = tk.Frame(root, height=2, bd=1, relief=tk.SUNKEN)
-            divider_frame.pack(fill='x', padx=5, pady=5)
-
-            self.inference_result_label = tk.Label(root, text="Inference Tree: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
+            inference_tree_frame = tk.LabelFrame(root, text="Inference Tree")
+            inference_tree_frame.pack(fill="x", padx=10, pady=5)
+            self.inference_result_label = tk.Label(inference_tree_frame, text="Inference Tree: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
             self.inference_result_label.pack(fill='x')
 
             for i in range(3):
-                label = tk.Label(root, text=f"Inference {i+1}: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
+                label = tk.Label(inference_tree_frame, text=f"Inference {i+1}: N/A", fg="white", bg="black", font=("Helvetica", 14, "bold"))
                 label.pack(fill='x')
                 self.inference_phrases_result_labels.append(label)
 
