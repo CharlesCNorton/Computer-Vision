@@ -1,3 +1,5 @@
+# !!!! (DEPRECATED! PLEASE SEE MAIN REPO PAGE FOR YOFLO-CLI and YOFLO-GUI!) !!!!
+
 
 # YO-FLO: YOLO-Like Object Detection with Florence Models
 
