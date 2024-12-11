@@ -22,6 +22,9 @@ class YO_FLO:
         self.processor = None
         self.inference_phrases_result_labels = []
         self.scaler = torch.cuda.amp.GradScaler()
+        self.resolutions = [(640, 480), (800, 600), (1280, 720), (1920, 1080)]
+        self.current_resolution_index = 0
+        self.resolution_change_requested = False
         self.inference_start_time = None
         self.inference_count = 0
         self.inference_rate_label = None
@@ -31,6 +34,8 @@ class YO_FLO:
         self.screenshot_active = False
         self.target_detected = False
         self.last_beep_time = 0
+        self.resolutions = [(640, 480), (800, 600), (1280, 720), (1920, 1080)]
+        self.current_resolution_index = 0
         self.stop_webcam_flag = threading.Event()
         self.model_path = None
         self.phrase = None
@@ -73,6 +78,14 @@ class YO_FLO:
             print(f"{Fore.GREEN}{Style.BRIGHT}Headless mode is now {status}{Style.RESET_ALL}")
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error toggling headless mode: {e}{Style.RESET_ALL}")
+
+    def toggle_resolution(self):
+        try:
+            self.current_resolution_index = (self.current_resolution_index + 1) % len(self.resolutions)
+            self.resolution_change_requested = True
+            print(f"{Fore.GREEN}{Style.BRIGHT}Resolution change requested: {self.resolutions[self.current_resolution_index]}{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}{Style.BRIGHT}Error toggling resolution: {e}{Style.RESET_ALL}")
 
     def run_object_detection(self, image):
         try:
@@ -412,13 +425,27 @@ class YO_FLO:
 
     def _webcam_detection_thread(self):
         try:
-            cap = cv2.VideoCapture(0)
-            if not cap.isOpened():
+            self.cap = cv2.VideoCapture(0)
+            if not self.cap.isOpened():
                 print(f"{Fore.RED}{Style.BRIGHT}Error: Could not open webcam.{Style.RESET_ALL}")
                 return
 
+            resolution = self.resolutions[self.current_resolution_index]
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, resolution[0])
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, resolution[1])
+            print(f"{Fore.GREEN}{Style.BRIGHT}Initial resolution set to: {resolution[0]}x{resolution[1]}{Style.RESET_ALL}")
+
             while not self.stop_webcam_flag.is_set():
-                ret, frame = cap.read()
+                if self.resolution_change_requested:
+                    resolution = self.resolutions[self.current_resolution_index]
+                    self.cap.release()
+                    self.cap = cv2.VideoCapture(0)
+                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, resolution[0])
+                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, resolution[1])
+                    self.resolution_change_requested = False
+                    print(f"{Fore.GREEN}{Style.BRIGHT}Resolution set to: {resolution[0]}x{resolution[1]}{Style.RESET_ALL}")
+
+                ret, frame = self.cap.read()
                 if not ret:
                     print(f"{Fore.RED}{Style.BRIGHT}Error: Failed to capture image from webcam.{Style.RESET_ALL}")
                     break
@@ -495,14 +522,14 @@ class YO_FLO:
                 except Exception as e:
                     print(f"{Fore.RED}{Style.BRIGHT}Error during frame processing: {e}{Style.RESET_ALL}")
 
-            cap.release()
+            self.cap.release()
             cv2.destroyAllWindows()
         except cv2.error as e:
             print(f"{Fore.RED}{Style.BRIGHT}OpenCV error: {e}{Style.RESET_ALL}")
         except Exception as e:
             print(f"{Fore.RED}{Style.BRIGHT}Error during webcam detection: {e}{Style.RESET_ALL}")
         finally:
-            cap.release()
+            self.cap.release()
             cv2.destroyAllWindows()
 
     def stop_webcam_detection(self):
@@ -573,6 +600,8 @@ class YO_FLO:
             tk.Button(webcam_frame, text="Stop Webcam Detection", command=self.stop_webcam_detection).pack(fill='x')
 
             tk.Button(root, text="Toggle Debug Mode", command=self.toggle_debug).pack(fill='x', padx=10, pady=10)
+
+            tk.Button(root, text="Toggle Resolution", command=self.toggle_resolution).pack(fill='x', padx=10, pady=10)
 
             inference_rate_frame = tk.LabelFrame(root, text="Inference Rate")
             inference_rate_frame.pack(fill="x", padx=10, pady=5)
