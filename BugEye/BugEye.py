@@ -1,170 +1,262 @@
-import numpy as np
-import cv2
+#!/usr/bin/env python3
+"""
+BugEye – hex-grid overlay & zoom for live camera frames.
+Author: Charles Norton  •  Updated: 2025-05-16
+"""
+import logging
 from math import sqrt, floor
+from pathlib import Path
 import tkinter as tk
 from tkinter import simpledialog
+from dataclasses import dataclass
+
+import cv2
+import numpy as np
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+
+# --------------------------------------------------------------------------- #
+#                           Geometry & Rendering                              #
+# --------------------------------------------------------------------------- #
+@dataclass
+class GridSettings:
+    hex_sizes: dict = None
+    default_key: str = "medium"
+
+    def __post_init__(self):
+        if self.hex_sizes is None:
+            self.hex_sizes = {"low": 80, "medium": 40, "high": 20}
+
+    @property
+    def default_size(self) -> int:
+        return self.hex_sizes[self.default_key]
+
 
 class HexagonalGrid:
-    def __init__(self, hex_size):
-        self.hex_size = hex_size
-        self.hex_sizes = {'low': 80, 'medium': 40, 'high': 20}
-        self.current_resolution = 'medium'
-        self.selected_hex = None
+    """Handles geometry, overlay caching, and zoom."""
 
-    def draw_hexagon(self, center):
-        """Draw a single hexagon given a center and a size."""
-        points = []
-        for i in range(6):
-            angle_deg = 60 * i + 30
-            angle_rad = np.radians(angle_deg)
-            point = (int(center[0] + self.hex_size * np.cos(angle_rad)), int(center[1] + self.hex_size * np.sin(angle_rad)))
-            points.append(point)
-        return np.array(points, np.int32)
+    def __init__(self, settings: GridSettings):
+        self.settings = settings
+        self.hex_size = settings.default_size
+        self.current_resolution = settings.default_key
 
-    def draw_hexagon_highlighted(self, center, img):
-        """Draw a highlighted hexagon."""
-        hexagon = self.draw_hexagon(center)
-        cv2.polylines(img, [hexagon], isClosed=True, color=(0, 255, 0), thickness=2)  # Highlight with a green outline
-        return img
+        # --- cache ---
+        self._overlay = None            # BGR image with grid & numbers
+        self._centers = {}              # {hex_number: (x, y)}
+        self._overlay_shape = None
+        self._dirty = True
 
-    def draw_numbered_hexagonal_grid(self, img):
-        """Draw a hexagonal grid on the image and number each complete hexagon."""
-        height, width = img.shape[:2]
-        w = sqrt(3) * self.hex_size
-        h = 2 * self.hex_size
-        vert_dist = 3/4 * h
-        horiz_count = int(floor(width / w)) + 1
-        vert_count = int(floor(height / vert_dist)) + 1
-        horiz_margin = (width - (horiz_count * w - w / 2)) / 2
-        vert_margin = (height - (vert_count * vert_dist - vert_dist / 4)) / 2
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = self.hex_size / 100
-        font_thickness = 1
-        text_color = (0, 0, 0)
-        outline_color = (255, 255, 255)
-        number = 1
+        # --- state ---
+        self.selected_hex: int | None = None
 
-        for row in range(vert_count + 1):
-            for col in range(horiz_count + 1):
-                center_x = int(col * w - w / 2 + horiz_margin)
-                center_y = int(row * vert_dist - vert_dist / 4 + vert_margin)
-                if row % 2 == 0:
-                    center_x -= int(w / 2)
-                if (0 <= center_x < width) and (0 <= center_y < height):
-                    hexagon = self.draw_hexagon((center_x, center_y))
-                    cv2.polylines(img, [hexagon], isClosed=True, color=(255, 255, 255), thickness=1)
+    # --------------------  resolution helper -------------------- #
+    def change_resolution(self, key: int) -> None:
+        mapping = {ord("l"): "low", ord("m"): "medium", ord("h"): "high"}
+        new_level = mapping.get(key)
+        if new_level and new_level != self.current_resolution:
+            self.current_resolution = new_level
+            self.hex_size = self.settings.hex_sizes[new_level]
+            self._dirty = True
+            logging.info("Resolution → %s", new_level)
 
-                    text_size = cv2.getTextSize(str(number), font, font_scale, font_thickness)[0]
-                    text_x = center_x - text_size[0] // 2
-                    text_y = center_y + text_size[1] // 4
-                    cv2.putText(img, str(number), (text_x - 1, text_y + 1), font, font_scale, outline_color, font_thickness + 2, cv2.LINE_AA)
-                    cv2.putText(img, str(number), (text_x, text_y), font, font_scale, text_color, font_thickness, cv2.LINE_AA)
-                    number += 1
+    # --------------------  public draw API ---------------------- #
+    def compose_frame(self, frame: np.ndarray) -> np.ndarray:
+        """Return a copy of frame with grid & optional highlight."""
+        if self._needs_refresh(frame):
+            self._build_overlay(frame)
 
-        return img
+        out = cv2.add(frame, self._overlay)
 
-    def get_hexagon_centers(self, width, height):
-        """Get the centers of all hexagons in the grid."""
-        w = sqrt(3) * self.hex_size
-        h = 2 * self.hex_size
-        vert_dist = 3/4 * h
-        horiz_count = int(floor(width / w)) + 1
-        vert_count = int(floor(height / vert_dist)) + 1
-        horiz_margin = (width - (horiz_count * w - w / 2)) / 2
-        vert_margin = (height - (vert_count * vert_dist - vert_dist / 4)) / 2
+        if self.selected_hex and self.selected_hex in self._centers:
+            center = self._centers[self.selected_hex]
+            out = self._draw_hexagon(out, center, color=(0, 255, 0), thick=2)
 
-        centers = {}
-        number = 1
-        for row in range(vert_count + 1):
-            for col in range(horiz_count + 1):
-                center_x = int(col * w - w / 2 + horiz_margin)
-                center_y = int(row * vert_dist - vert_dist / 4 + vert_margin)
-                if row % 2 == 0:
-                    center_x -= int(w / 2)
-                if (0 <= center_x < width) and (0 <= center_y < height):
-                    centers[number] = (center_x, center_y)
-                    number += 1
-        return centers
+        return out
 
-    def zoom_into_hexagon(self, frame, center):
-        """Zoom into the selected hexagon."""
-        zoom_factor = 3
-        hex_width = int(sqrt(3) * self.hex_size)
-        hex_height = 2 * self.hex_size
-        x, y = center
-        x1, y1 = max(x - hex_width // 2, 0), max(y - hex_height // 2, 0)
-        x2, y2 = min(x + hex_width // 2, frame.shape[1]), min(y + hex_height // 2, frame.shape[0])
-        cropped_img = frame[y1:y2, x1:x2]
-        if cropped_img.size == 0:
+    def zoom_selected(self, frame: np.ndarray) -> np.ndarray | None:
+        """Return a masked & enlarged view of the selected hex (or None)."""
+        if not (self.selected_hex and self.selected_hex in self._centers):
             return None
-        return cv2.resize(cropped_img, None, fx=zoom_factor, fy=zoom_factor, interpolation=cv2.INTER_LINEAR)
+        cx, cy = self._centers[self.selected_hex]
 
-    def ask_hexagon_number(self):
-        """Creates a Tkinter popup to ask for the hexagon number."""
+        R = self.hex_size
+        w = int(sqrt(3) * R)
+        h = 2 * R
+        x1, y1 = max(cx - w // 2, 0), max(cy - h // 2, 0)
+        x2, y2 = min(cx + w // 2, frame.shape[1]), min(cy + h // 2,
+                                                       frame.shape[0])
+        roi = frame[y1:y2, x1:x2]
+        if roi.size == 0:
+            return None
+
+        # hex mask in ROI coordinates
+        pts = self._hexagon_vertices((cx - x1, cy - y1))
+        mask = np.zeros(roi.shape[:2], dtype=np.uint8)
+        cv2.fillPoly(mask, [pts], 255)
+        roi_masked = cv2.bitwise_and(roi, roi, mask=mask)
+
+        return cv2.resize(roi_masked, None, fx=3, fy=3,
+                          interpolation=cv2.INTER_LINEAR)
+
+    # ------------------------------------------------------------------ #
+    #                        Internal helpers                             #
+    # ------------------------------------------------------------------ #
+    def _needs_refresh(self, frame: np.ndarray) -> bool:
+        return self._dirty or self._overlay is None or \
+            self._overlay_shape != frame.shape[:2]
+
+    def _build_overlay(self, frame: np.ndarray) -> None:
+        """Cache the grid overlay (lines + numbers) and centers."""
+        logging.debug("Rebuilding grid overlay …")
+        h_frame, w_frame = frame.shape[:2]
+        overlay = np.zeros_like(frame)
+        self._centers.clear()
+
+        R = self.hex_size
+        w_hex = sqrt(3) * R
+        h_hex = 2 * R
+        vert_stride = 0.75 * h_hex
+
+        # how many rows / cols *really* fit?
+        n_rows = int((h_frame + h_hex / 2) // vert_stride) + 1
+        n_cols = int((w_frame + w_hex) // w_hex) + 1
+
+        # compute bounding box of grid to center it
+        grid_w = n_cols * w_hex + w_hex / 2
+        grid_h = n_rows * vert_stride + h_hex / 4
+        margin_x = (w_frame - grid_w) / 2
+        margin_y = (h_frame - grid_h) / 2
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = R / 110.0
+        font_th = 1
+        n = 1
+        for row in range(n_rows):
+            y = row * vert_stride + margin_y + h_hex / 2
+            for col in range(n_cols):
+                x = col * w_hex + margin_x + w_hex
+                # even rows shifted right by half-width
+                if row % 2 == 0:
+                    x += w_hex / 2
+
+                if not (0 <= x < w_frame and 0 <= y < h_frame):
+                    continue
+
+                center = (int(x), int(y))
+                self._centers[n] = center
+
+                # hex outline
+                overlay = self._draw_hexagon(overlay, center)
+                # number
+                label = str(n)
+                text_sz = cv2.getTextSize(label, font, font_scale, font_th)[0]
+                cv2.putText(
+                    overlay, label,
+                    (center[0] - text_sz[0] // 2, center[1] + text_sz[1] // 2),
+                    font, font_scale, (255, 255, 255), font_th + 2,
+                    cv2.LINE_AA)
+                cv2.putText(
+                    overlay, label,
+                    (center[0] - text_sz[0] // 2, center[1] + text_sz[1] // 2),
+                    font, font_scale, (0, 0, 0), font_th, cv2.LINE_AA)
+                n += 1
+
+        self._overlay = overlay
+        self._overlay_shape = frame.shape[:2]
+        self._dirty = False
+        logging.info("Grid overlay ready – %d hexes", len(self._centers))
+
+    def _hexagon_vertices(self, center: tuple[int, int]) -> np.ndarray:
+        cx, cy = center
+        R = self.hex_size
+        pts = []
+        for i in range(6):
+            ang = np.radians(60 * i + 30)
+            pts.append([int(cx + R * np.cos(ang)),
+                        int(cy + R * np.sin(ang))])
+        return np.asarray(pts, dtype=np.int32)
+
+    def _draw_hexagon(
+        self, img: np.ndarray, center: tuple[int, int], *,
+        color=(255, 255, 255), thick: int = 1
+    ) -> np.ndarray:
+        pts = self._hexagon_vertices(center)
+        return cv2.polylines(img, [pts], isClosed=True, color=color,
+                             thickness=thick)
+
+    # ---------------------  selection dialog -------------------- #
+    def ask_hexagon_number(self, max_n: int) -> int | None:
         root = tk.Tk()
-        root.withdraw()  # Hide the main window
+        root.withdraw()
         try:
-            num = simpledialog.askinteger("Input", "Enter hexagon number:", parent=root, minvalue=1)
-        except Exception as e:
-            print(f"Error: {e}")
+            num = simpledialog.askinteger(
+                "Hexagon #",
+                f"Enter a number (1–{max_n}):",
+                parent=root,
+                minvalue=1, maxvalue=max_n)
+        except Exception as exc:
+            logging.error("Dialog error: %s", exc)
             num = None
         return num
 
-    def change_resolution(self, key):
-        if key == ord('l'):
-            self.hex_size = self.hex_sizes['low']
-            self.current_resolution = 'low'
-        elif key == ord('m'):
-            self.hex_size = self.hex_sizes['medium']
-            self.current_resolution = 'medium'
-        elif key == ord('h'):
-            self.hex_size = self.hex_sizes['high']
-            self.current_resolution = 'high'
 
-    def display_info(self, frame):
-        info_text = f"Resolution: {self.current_resolution} (Press 'l' for low, 'm' for medium, 'h' for high)"
-        cv2.putText(frame, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
-
+# --------------------------------------------------------------------------- #
+#                               Main App                                      #
+# --------------------------------------------------------------------------- #
 class HexagonalGridApp:
     def __init__(self):
-        self.hex_grid = HexagonalGrid(hex_size=40)
+        self.grid = HexagonalGrid(GridSettings())
         self.cap = cv2.VideoCapture(0)
-
-    def run(self):
         if not self.cap.isOpened():
             raise IOError("Cannot open webcam")
+
+    # ---------------------------  loop  ----------------------------------- #
+    def run(self) -> None:
+        logging.info("BugEye – press l/m/h to change resolution, "
+                     "s to select, q to quit")
 
         while True:
             ret, frame = self.cap.read()
             if not ret:
                 break
 
-            frame_with_grid = self.hex_grid.draw_numbered_hexagonal_grid(frame)
-            centers = self.hex_grid.get_hexagon_centers(frame.shape[1], frame.shape[0])
+            frame = cv2.flip(frame, 1)   # mirror for friendlier UX
 
-            if self.hex_grid.selected_hex and self.hex_grid.selected_hex in centers:
-                center = centers[self.hex_grid.selected_hex]
-                frame_with_grid = self.hex_grid.draw_hexagon_highlighted(center, frame_with_grid)
-                zoomed_hex = self.hex_grid.zoom_into_hexagon(frame, center)
-                if zoomed_hex is not None:
-                    cv2.imshow('Zoomed Hexagon', zoomed_hex)
+            out = self.grid.compose_frame(frame)
+            cv2.putText(
+                out,
+                f"Resolution: {self.grid.current_resolution} "
+                "(l/m/h)  –  s: select  q: quit",
+                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                (255, 255, 255), 2, cv2.LINE_AA)
 
-            cv2.imshow('Hexagonal Grid Overlay', frame_with_grid)
-            self.hex_grid.display_info(frame_with_grid)
+            cv2.imshow("Hexagonal Grid Overlay", out)
+
+            # show zoom window if available
+            zoom = self.grid.zoom_selected(frame)
+            if zoom is not None:
+                cv2.imshow("Zoomed Hexagon", zoom)
 
             key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
+            if key == ord("q"):
                 break
-            elif key == ord('s'):
-                new_selection = self.hex_grid.ask_hexagon_number()
-                if new_selection is not None:
-                    self.hex_grid.selected_hex = new_selection
+            if key in (ord("l"), ord("m"), ord("h")):
+                self.grid.change_resolution(key)
+            elif key == ord("s"):
+                if not self.grid._centers:
+                    continue
+                sel = self.grid.ask_hexagon_number(max(self.grid._centers))
+                if sel:
+                    self.grid.selected_hex = sel
 
-            self.hex_grid.change_resolution(key)
+        self._cleanup()
 
+    def _cleanup(self) -> None:
         self.cap.release()
         cv2.destroyAllWindows()
 
-if __name__ == '__main__':
-    app = HexagonalGridApp()
-    app.run()
+
+# --------------------------------------------------------------------------- #
+if __name__ == "__main__":
+    HexagonalGridApp().run()
